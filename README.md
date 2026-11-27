@@ -39,7 +39,7 @@ chmod +x dev.sh
 
 On startup, `dev.sh` automatically:
 1. Configures `git config core.hooksPath .githooks` if inside a Git work tree (and warns if `git-flow-avh` is not installed).
-2. Creates `.env` from `.env.example` if `.env` does not exist yet, then loads it into the environment.
+2. For Docker stack commands, creates `.env` from `.env.example` if `.env` does not exist yet, then loads it into the environment. Standalone commands (`help`, `commit-msg`) work even without `.env` or `.env.example`.
 
 ### Environment Variables
 
@@ -76,9 +76,9 @@ Usage: ./dev.sh <command> [args...]
 | `db [psql\|migrate\|seed\|fresh]` | `db:psql`, `db:migrate`, `db:seed`, `db:fresh` | Open `psql` in `db` (default), or run Lucid `migration:run`, `db:seed`, or `migration:fresh --seed` in `api`. |
 | `expo <args...>` | — | Run Expo CLI (`npx expo`) inside the `ui` container. |
 | `trust-cert [--force\|-f]` | — | Export Caddy's local Root CA, rotate expiring (within 24h) or forced certificates, sync host trust stores, check domain resolution, and verify trusted HTTPS. |
-| `commit-msg` | `git-commit` | Generate a commit message via `agy` using the `git-commit` skill and copy it to the system clipboard (does not require Docker). |
+| `commit-msg` | `git-commit` | Generate a commit message via `agy` using the `git-commit` skill and copy it to the system clipboard (does not require Docker or `.env`/`.env.example`). |
 | `clean [-y\|--yes]` | — | Stop the stack and remove named volumes (`docker compose down -v --remove-orphans`) with confirmation. |
-| `help` | `-h`, `--help` | Show usage, active project/domain metadata, and available commands. |
+| `help` | `-h`, `--help` | Show usage, active project/domain metadata, and available commands (does not require Docker or `.env`/`.env.example`). |
 
 ### Automated Local HTTPS Trust (`trust-cert`)
 

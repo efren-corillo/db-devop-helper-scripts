@@ -60,7 +60,10 @@ die() {
 
 #-----------------------------------------
 # Load environment variables from .env, creating it from .env.example if absent.
+# Pass '--optional' to skip creating .env and fall back to defaults when no env
+# files exist (used by standalone commands such as help and commit-msg).
 #
+# @param  string $1 Optional '--optional' flag to allow running without .env/.env.example.
 # @global string ENV_FILE Path to the project .env file.
 # @global string ENV_EXAMPLE_FILE Path to the .env.example template.
 # @global string PROJECT Docker Compose project and container prefix.
@@ -73,7 +76,12 @@ die() {
 # @return void
 #-----------------------------------------
 load_env() {
-  if [ ! -f "${ENV_FILE}" ]; then
+  local optional="false"
+  if [ "${1:-}" = "--optional" ]; then
+    optional="true"
+  fi
+
+  if [ ! -f "${ENV_FILE}" ] && [ "${optional}" != "true" ]; then
     if [ -f "${ENV_EXAMPLE_FILE}" ]; then
       cp "${ENV_EXAMPLE_FILE}" "${ENV_FILE}"
       log_info "Created .env from .env.example"
@@ -82,12 +90,14 @@ load_env() {
     fi
   fi
 
-  set -a
-  # shellcheck disable=SC1090
-  . "${ENV_FILE}"
-  set +a
+  if [ -f "${ENV_FILE}" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "${ENV_FILE}"
+    set +a
+  fi
 
-  PROJECT="${PROJECT:-db-kanva}"
+  PROJECT="${PROJECT:-}"
   DOMAIN="${DOMAIN:-kanva.localhost}"
   HTTP_PORT="${HTTP_PORT:-80}"
   HTTPS_PORT="${HTTPS_PORT:-443}"
@@ -985,19 +995,18 @@ cmd_commit_msg() {
 }
 
 #-----------------------------------------
-# Print CLI usage, active project/domain metadata, and available subcommands.
+# Print CLI usage, optional project metadata, and available subcommands.
 #
 # @global string PROJECT Compose project name.
 # @stdout Formatted help text.
 # @return void
 #-----------------------------------------
 cmd_help() {
-  cat <<EOF
-Usage: ./dev.sh <command> [args...]
-
-Project: ${PROJECT}
-Domain:  $(app_url)
-
+  printf 'Usage: ./dev.sh <command> [args...]\n\n'
+  if [ -n "${PROJECT:-}" ]; then
+    printf 'Project: %s\n\n' "${PROJECT}"
+  fi
+  cat <<'EOF'
 Commands:
   up [services...]        Start containers in background (auto-syncs Caddy HTTPS cert)
   down [args...]          Stop and remove containers/networks
@@ -1049,32 +1058,41 @@ setup_git_hooks() {
 }
 
 #-----------------------------------------
-# CLI entrypoint: load .env, validate Docker prerequisites, and dispatch subcommands.
+# CLI entrypoint: dispatch standalone commands without requiring .env or Docker,
+# then load .env, validate Docker prerequisites, and dispatch stack subcommands.
 #
 # @param  string $@ CLI subcommand and optional arguments.
 # @return void
 #-----------------------------------------
 main() {
   setup_git_hooks
-  load_env
 
   local cmd="${1:-help}"
   if [ "$#" -gt 0 ]; then
     shift
   fi
 
-  if [ "${cmd}" = "help" ] || [ "${cmd}" = "-h" ] || [ "${cmd}" = "--help" ]; then
-    cmd_help
-    exit 0
-  fi
-
   case "${cmd}" in
+    help|-h|--help)
+      load_env --optional
+      cmd_help
+      exit 0
+      ;;
     commit-msg|git-commit)
       cmd_commit_msg "$@"
       exit 0
       ;;
+    up|down|restart|build|logs|ps|status|shell|ace|db|db:psql|db:migrate|db:seed|db:fresh|expo|trust-cert|clean)
+      ;;
+    *)
+      load_env --optional
+      log_err "Unknown command: ${cmd}"
+      cmd_help
+      exit 1
+      ;;
   esac
 
+  load_env
   preflight_docker
 
   case "${cmd}" in
@@ -1094,11 +1112,6 @@ main() {
     expo)       cmd_expo "$@" ;;
     trust-cert) cmd_trust_cert "$@" ;;
     clean)      cmd_clean "$@" ;;
-    *)
-      log_err "Unknown command: ${cmd}"
-      cmd_help
-      exit 1
-      ;;
   esac
 }
 
